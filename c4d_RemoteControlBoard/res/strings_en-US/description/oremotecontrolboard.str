@@ -1,0 +1,8 @@
+STRINGTABLE Oremotecontrolboard
+{
+	Oremotecontrolboard "Remote Control Board";
+
+	BODY_PART	    "Body Part Port Name";
+	CONNECT_TEXT    "Connect";
+	DISCONNECT_TEXT "Disconnect";
+}
