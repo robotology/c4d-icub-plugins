@@ -6,22 +6,24 @@
 #include <vector>
 // project header files
 #include "user_interface.h"
-
+#include <cstdlib>
 // If the classic API is used PluginStart(), PluginMessage() and PluginEnd() must be implemented.
 
 ::Bool PluginStart()
 {
-    auto ret = maxon::DllInterface::LoadDll(maxon::Url(maxon::String("file:///C:/Program Files/robotology/ACE-6.5.0_v14_x86_amd64/bin/ACEd.dll")), true , false);
+    std::string libprefix = std::getenv("YARP_DIR");
+    libprefix += "/bin/Debug/";
+    /*auto ret = maxon::DllInterface::LoadDll(maxon::Url(maxon::String("file:///C:/Program Files/robotology/ACE-6.5.0_v14_x86_amd64/bin/ACEd.dll")), true , false);
     if (ret == maxon::FAILED)
     {
         auto error = ret.GetError();
         error.DiagOutput();
-    }
+    }*/
 
     std::vector<std::string> dlls = { "YARP_OSd.dll", "YARP_initd.dll", "YARP_sigd.dll", "YARP_mathd.dll", "YARP_devd.dll"};
     for (auto d : dlls)
     {
-        std::string s = "file:///C:/software/yarp/build/bin/Debug/" + d;
+        std::string s = libprefix + d;
         auto url = maxon::Url(maxon::String(s.data()));
         auto ret = maxon::DllInterface::LoadDll(url, true, false);
         if (ret == maxon::FAILED)

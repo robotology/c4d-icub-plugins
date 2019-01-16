@@ -20,7 +20,6 @@
 #include <yarp/dev/IControlMode.h>
 #include <yarp/dev/IAxisInfo.h>
 
-using namespace maxon;
 namespace yarpC4D
 {
 //-------------------------------------------------------------------------------------------
