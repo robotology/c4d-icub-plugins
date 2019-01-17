@@ -7,18 +7,39 @@
 // project header files
 #include "user_interface.h"
 #include <cstdlib>
+#include <vector>
+using namespace std;
 // If the classic API is used PluginStart(), PluginMessage() and PluginEnd() must be implemented.
+
+const vector<string> explode(const string& s, const char& c)
+{
+    string buff{ "" };
+    vector<string> v;
+
+    for (auto n : s)
+    {
+        if (n != c) buff += n; else
+            if (n == c && buff != "") { v.push_back(buff); buff = ""; }
+    }
+    if (buff != "") v.push_back(buff);
+
+    return v;
+}
 
 ::Bool PluginStart()
 {
     std::string libprefix = std::getenv("YARP_DIR");
     libprefix += "/bin/Debug/";
-    /*auto ret = maxon::DllInterface::LoadDll(maxon::Url(maxon::String("file:///C:/Program Files/robotology/ACE-6.5.0_v14_x86_amd64/bin/ACEd.dll")), true , false);
-    if (ret == maxon::FAILED)
+    std::string path = std::getenv("Path");
+    for (const auto& s : explode(path, ';'))
     {
-        auto error = ret.GetError();
-        error.DiagOutput();
-    }*/
+        auto ret = maxon::DllInterface::LoadDll(maxon::Url(maxon::String((s+"/ACEd.dll").c_str())), true, false);
+        if (ret == maxon::OK)
+        {
+            DiagnosticOutput("ACE library loaded!");
+        }
+    }
+    
 
     std::vector<std::string> dlls = { "YARP_OSd.dll", "YARP_initd.dll", "YARP_sigd.dll", "YARP_mathd.dll", "YARP_devd.dll"};
     for (auto d : dlls)
