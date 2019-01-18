@@ -5,4 +5,6 @@ STRINGTABLE Oremotecontrolboard
 	BODY_PART	    "Body Part Port Name";
 	CONNECT_TEXT    "Connect";
 	DISCONNECT_TEXT "Disconnect";
+	JOINT_COUNT 	"Joint Count";
+	CONFIGURE_TEXT  "Auto-Configure";
 }

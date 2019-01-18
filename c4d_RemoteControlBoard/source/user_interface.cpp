@@ -11,6 +11,7 @@
 #include "obase.h"
 #include "c4d_customdatatypeplugin.h"
 #include "../res/description/oremotecontrolboard.h"
+#include <algorithm>
 
 #include <yarp/os/Network.h>
 #include <yarp/os/LogStream.h>
@@ -41,6 +42,7 @@ public:
 
     int axisCount{0};
     std::vector<std::string> axisNames;
+    std::vector<BaseObject*> jObjects;
 
     virtual Bool GetDEnabling(GeListNode* node, const DescID& id, const GeData& t_data, DESCFLAGS_ENABLE flags, const BaseContainer* itemdesc) override
     {
@@ -109,12 +111,21 @@ public:
             return false;
 
         GeData data;
-        this->Get()->GetParameter(DescID(BODY_PART), data, DESCFLAGS_GET::NONE);
-
-        const DescID* singleid = description->GetSingleDescID();
-        for (int i = 0; i < axisCount; i++)
+        this->Get()->GetParameter(DescID(JOINT_COUNT), data, DESCFLAGS_GET::NONE);
+        auto count = data.GetInt32();
+        auto currentcount = axisNames.size();
+        if (currentcount < count)
         {
-            DescID cid = DescLevel(1003+i, DTYPE_BASELISTLINK, 0);
+            std::generate_n(std::back_inserter(axisNames), count - axisNames.size(), [this]
+            { 
+                auto ret = std::string("joint") + std::to_string(axisNames.size());
+                return ret;
+            });
+        }
+        const DescID* singleid = description->GetSingleDescID();
+        for (int i = 0; i < count; i++)
+        {
+            DescID cid = DescLevel(JOINTS+i, DTYPE_BASELISTLINK, 0);
 
             if (!singleid || cid.IsPartOf(*singleid, nullptr))
             {
@@ -157,6 +168,11 @@ public:
                 break;
             }
             case DISCONNECT_BUTTON:
+            {
+                return closeDevice();
+                break;
+            }
+            case CONFIGURE_BUTTON:
             {
                 return closeDevice();
                 break;
