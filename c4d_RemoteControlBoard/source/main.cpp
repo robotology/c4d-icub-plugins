@@ -33,7 +33,13 @@ const vector<string> explode(const string& s, const char& c)
     std::string path = std::getenv("Path");
     for (const auto& s : explode(path, ';'))
     {
-        auto ret = maxon::DllInterface::LoadDll(maxon::Url(maxon::String((s+"/ACEd.dll").c_str())), true, false);
+        auto ret = maxon::DllInterface::AddDllPath(maxon::Url(maxon::String(s.c_str())));
+        if (ret == maxon::OK)
+        {
+            DiagnosticOutput("Path succesfully added!");
+        }
+
+        ret = maxon::DllInterface::LoadDll(maxon::Url(maxon::String((s+"/ACEd.dll").c_str())), true, false);
         if (ret == maxon::OK)
         {
             DiagnosticOutput("ACE library loaded!");
