@@ -86,7 +86,7 @@ public:
     {
         static BaseObject* ret = BaseObject::Alloc(Onull);
 
-        if (axisCount)
+        if (axisCount && pdir)
         {
             
             jointData.resize(axisCount);
@@ -94,6 +94,10 @@ public:
             {
                 if (jObjects[i])
                 {
+                    DiagnosticOutput(jObjects[i]->GetName());
+                    DiagnosticOutput(std::to_string(jObjects[i]->GetRelRot().x).c_str());
+                    DiagnosticOutput(std::to_string(jObjects[i]->GetRelRot().y).c_str());
+                    DiagnosticOutput(std::to_string(jObjects[i]->GetRelRot().z).c_str());
                     jointData[i] = maxon::RadToDeg(jObjects[i]->GetRelRot().x);
                 }
             }
@@ -107,20 +111,24 @@ public:
     {
         if (!description->LoadDescription(node->GetType())) 
             return false;
-
         GeData data;
-        this->Get()->GetParameter(DescID(JOINT_COUNT), data, DESCFLAGS_GET::NONE);
-        axisCount = data.GetInt32();
-        auto currentcount = axisNames.size();
-        if (currentcount < axisCount)
-        {
-            std::generate_n(std::back_inserter(axisNames), axisCount - axisNames.size(), [this]
-            { 
-                auto ret = std::string("joint") + std::to_string(axisNames.size());
-                return ret;
-            });
-        }
         const DescID* singleid = description->GetSingleDescID();
+        if (!singleid || DescID(JOINT_COUNT).IsPartOf(*singleid, nullptr))
+        {
+            
+            this->Get()->GetParameter(DescID(JOINT_COUNT), data, DESCFLAGS_GET::NONE);
+            axisCount = data.GetInt32();
+            auto currentcount = axisNames.size();
+            if (currentcount < axisCount)
+            {
+                std::generate_n(std::back_inserter(axisNames), axisCount - axisNames.size(), [this]
+                {
+                    auto ret = std::string("joint") + std::to_string(axisNames.size());
+                    return ret;
+                });
+            }
+        }
+
         for (int i = 0; i < axisCount; i++)
         {
             DescID cid = DescLevel(JOINTS+i, DTYPE_BASELISTLINK, 0);
@@ -194,15 +202,28 @@ public:
 
     bool autoConfigure(const std::string part)
     {
-        if (openPolydrv(part))
+        if (!openPolydrv(part))
             return false;
 
         pdir->getAxes(&axisCount);
         GeData data;
         data.SetInt32(axisCount);
         this->Get()->SetParameter(DescID(JOINT_COUNT), data, DESCFLAGS_SET::NONE);
-
+        pdir->getAxes(&axisCount);
         if(!setControlMode(VOCAB_CM_POSITION_DIRECT) || !setAxisNames()) return closeDevice();
+        int jn = 0;
+        for (const auto& i : axisNames)
+        {
+            auto* obj = doc->SearchObject(String(i.c_str()));
+            if (obj)
+            {
+                data = GeData();
+                data.SetBaseList2D(obj);
+                this->Get()->SetParameter(DescID(JOINTS + jn), data, DESCFLAGS_SET::NONE);
+            }
+            jn++;
+        }
+        updateGui();
         return true;
     }
 
@@ -277,7 +298,7 @@ public:
 
     Bool openDevice(const std::string part)
     {
-        if (openPolydrv(part))
+        if (!openPolydrv(part))
             return false;
 
         int actualaxiscount;
