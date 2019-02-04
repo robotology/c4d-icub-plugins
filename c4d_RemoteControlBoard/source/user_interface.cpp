@@ -38,12 +38,12 @@ public:
     yarp::dev::PolyDriver       pdr;
 
     //interfaces
-    yarp::dev::IPositionDirect* pdir;
-    yarp::dev::IControlMode*    cm;
-    yarp::dev::IAxisInfo*       ai;
+    yarp::dev::IPositionDirect* pdir{nullptr};
+    yarp::dev::IControlMode*    cm{ nullptr };
+    yarp::dev::IAxisInfo*       ai{ nullptr };
     
     //cinema objects
-    BaseDocument*               doc;
+    BaseDocument*               doc{ nullptr };
 
     //others
     int                         axisCount{0};
@@ -94,10 +94,6 @@ public:
             {
                 if (jObjects[i])
                 {
-                    DiagnosticOutput(jObjects[i]->GetName());
-                    DiagnosticOutput(std::to_string(jObjects[i]->GetRelRot().x).c_str());
-                    DiagnosticOutput(std::to_string(jObjects[i]->GetRelRot().y).c_str());
-                    DiagnosticOutput(std::to_string(jObjects[i]->GetRelRot().z).c_str());
                     jointData[i] = maxon::RadToDeg(jObjects[i]->GetRelRot().x);
                 }
             }
@@ -152,6 +148,7 @@ public:
 
         for (int i = 0; i < axisCount; i++)
         {
+            doc = GetActiveDocument();
             this->Get()->GetParameter(DescID(JOINTS + i), data, DESCFLAGS_GET::NONE);
             jObjects[i] = (BaseObject*)data.GetLink(doc);
         }
@@ -202,6 +199,7 @@ public:
 
     bool autoConfigure(const std::string part)
     {
+        doc = GetActiveDocument();
         if (!openPolydrv(part))
             return false;
 
@@ -210,7 +208,8 @@ public:
         data.SetInt32(axisCount);
         this->Get()->SetParameter(DescID(JOINT_COUNT), data, DESCFLAGS_SET::NONE);
         pdir->getAxes(&axisCount);
-        if(!setControlMode(VOCAB_CM_POSITION_DIRECT) || !setAxisNames()) return closeDevice();
+        if(!setAxisNames()) return closeDevice();
+        closeDevice();
         int jn = 0;
         for (const auto& i : axisNames)
         {
@@ -322,6 +321,7 @@ public:
         ai   = nullptr;
         pdir = nullptr;
     }
+    
     Bool closeDevice()
     {
         resetInterfaces();
