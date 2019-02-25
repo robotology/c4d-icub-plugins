@@ -12,6 +12,7 @@
 #include "c4d_customdatatypeplugin.h"
 #include "../res/description/oremotecontrolboard.h"
 #include <algorithm>
+#include <unordered_set>
 
 #include <yarp/os/Network.h>
 #include <yarp/os/LogStream.h>
@@ -23,10 +24,7 @@
 
 namespace yarpC4D
 {
-//-------------------------------------------------------------------------------------------
-/// A simple command that will be displayed in the GUI.
-/// Used to call MakeCube() and insert the created object into the active document.
-//-------------------------------------------------------------------------------------------
+
 class C4DRemoteControlBoard : public ObjectData
 {
 	INSTANCEOF(C4DRemoteControlBoard, ObjectData)
@@ -179,7 +177,8 @@ public:
             }
             case DISCONNECT_BUTTON:
             {
-                return closeDevice();
+                closeDevice();
+                return false;
                 break;
             }
             case CONFIGURE_BUTTON:
@@ -208,7 +207,11 @@ public:
         data.SetInt32(axisCount);
         this->Get()->SetParameter(DescID(JOINT_COUNT), data, DESCFLAGS_SET::NONE);
         pdir->getAxes(&axisCount);
-        if(!setAxisNames()) return closeDevice();
+        if (!setAxisNames())
+        {
+            closeDevice();
+            return false;
+        }
         closeDevice();
         int jn = 0;
         for (const auto& i : axisNames)
@@ -233,7 +236,8 @@ public:
         yarp::os::Property conf;
         conf.put("device", "remote_controlboard");
         conf.put("remote", part);
-        conf.put("local", "/c4dremotecb");
+        std::string portname = "/c4dremotecb" + part.substr(part.rfind('/'));
+        conf.put("local", portname);
         conf.put("carrier", "tcp");
         if (!pdr.open(conf))
         {
@@ -305,13 +309,15 @@ public:
         
         if (actualaxiscount != axisCount)
         {
-            pdr.close();
+            closeDevice();
             return false;
         }
 
-        if(!setControlMode(VOCAB_CM_POSITION_DIRECT) || !setAxisNames())
-            return closeDevice();
-        
+        if (!setControlMode(VOCAB_CM_POSITION_DIRECT) || !setAxisNames())
+        {
+            closeDevice();
+            return false;
+        }
         return true;
     }
 
@@ -322,12 +328,14 @@ public:
         pdir = nullptr;
     }
     
-    Bool closeDevice()
+    void closeDevice()
     {
         resetInterfaces();
         pdr.close();
+        pdir = nullptr;
+        cm = nullptr;
+        ai = nullptr;
         updateGui();
-        return true;
     }
 
     void updateGui()
