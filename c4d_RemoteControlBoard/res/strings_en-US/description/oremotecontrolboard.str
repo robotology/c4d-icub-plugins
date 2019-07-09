@@ -7,4 +7,8 @@ STRINGTABLE Oremotecontrolboard
 	DISCONNECT_TEXT "Disconnect";
 	JOINT_COUNT 	"Joint Count";
 	CONFIGURE_TEXT  "Auto-Configure";
+	SENDPOS_TEXT  	"Send Positions";
+	CONTROL_MODE "Control modes";
+	CONTROL_MODE_POSITION "Position";
+	CONTROL_MODE_POSITION_DIRECT "Position Direct";
 }

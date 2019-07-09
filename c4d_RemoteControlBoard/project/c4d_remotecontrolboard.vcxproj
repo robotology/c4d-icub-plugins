@@ -14,7 +14,7 @@
     <ProjectGuid>{93F64C87-4AE9-35DF-0009-38CB8C5CDEA3}</ProjectGuid>
     <RootNamespace>maxon</RootNamespace>
     <Keyword>Win32Proj</Keyword>
-    <WindowsTargetPlatformVersion>10.0.17134.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0.17763.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <ImportGroup Label="PropertySheets">

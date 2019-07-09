@@ -19,6 +19,7 @@
 #include <yarp/dev/PolyDriver.h>
 #include <yarp/os/Vocab.h>
 #include <yarp/dev/IPositionDirect.h>
+#include <yarp/dev/IPositionControl.h>
 #include <yarp/dev/IControlMode.h>
 #include <yarp/dev/IAxisInfo.h>
 
@@ -30,15 +31,23 @@ class C4DRemoteControlBoard : public ObjectData
 	INSTANCEOF(C4DRemoteControlBoard, ObjectData)
 
 public:
+    
+    enum class ControlMode
+    {
+        POSITION,
+        POSITION_DIRECT
+    };
 
     //yarp objects
     yarp::os::Network           yarpnet;
     yarp::dev::PolyDriver       pdr;
+    ControlMode                 mode{ControlMode::POSITION};
 
     //interfaces
-    yarp::dev::IPositionDirect* pdir{nullptr};
-    yarp::dev::IControlMode*    cm{ nullptr };
-    yarp::dev::IAxisInfo*       ai{ nullptr };
+    yarp::dev::IPositionDirect*  pdir{nullptr};
+    yarp::dev::IPositionControl* pos{ nullptr };
+    yarp::dev::IControlMode*     cm{ nullptr };
+    yarp::dev::IAxisInfo*        ai{ nullptr };
     
     //cinema objects
     BaseDocument*               doc{ nullptr };
@@ -48,6 +57,29 @@ public:
     std::vector<std::string>    axisNames;
     std::vector<BaseObject*>    jObjects;
     std::vector<double>         jointData;
+    bool                        shouldSetControlMode{ false };
+
+    bool SendPositionCommand()
+    {
+        if(mode != ControlMode::POSITION || !pos || !axisCount)
+        {
+            return false;
+        }
+
+        jointData.resize(axisCount);
+        for (int i = 0; i < axisCount; i++)
+        {
+            if (jObjects[i])
+            {
+                auto v = maxon::RadToDeg(jObjects[i]->GetRelRot().x);
+                jointData[i] = v;
+            }
+        }
+        if (!pos->setRefSpeeds(std::vector<double>(jointData.size(), 10.0).data()))
+            return false;
+        return pos->positionMove(jointData.data());
+        
+    }
 
     virtual Bool GetDEnabling(GeListNode* node, const DescID& id, const GeData& t_data, DESCFLAGS_ENABLE flags, const BaseContainer* itemdesc) override
     {
@@ -62,6 +94,14 @@ public:
         if (id[0].id == DISCONNECT_BUTTON)
         {
             if (!pdr.isValid())
+            {
+                return false;
+            }
+        }
+
+        if (id[0].id == SENDPOS_BUTTON)
+        {
+            if (mode != ControlMode::POSITION || !pdr.isValid())
             {
                 return false;
             }
@@ -83,49 +123,67 @@ public:
     virtual BaseObject* GetVirtualObjects(BaseObject* op, HierarchyHelp* hh) override
     {
         static BaseObject* ret = BaseObject::Alloc(Onull);
-
-        if (axisCount && pdir)
+        bool abort{ false };
+        if (axisCount && pdir && mode == ControlMode::POSITION_DIRECT)
         {
-            
             jointData.resize(axisCount);
             for (int i = 0; i < axisCount; i++)
             {
                 if (jObjects[i])
                 {
-                    jointData[i] = maxon::RadToDeg(jObjects[i]->GetRelRot().x);
+                    auto v = maxon::RadToDeg(jObjects[i]->GetRelRot().x);
+                    if (fabs(v - jointData[i]) > 5.0)
+                        abort = true;
+                    jointData[i] = v;
                 }
             }
-            pdir->setPositions(jointData.data());
+            if(abort)
+            {
+                mode = ControlMode::POSITION;
+                shouldSetControlMode = true;
+                setControlMode(VOCAB_CM_POSITION);
+                //SendPositionCommand();
+                
+            }
+            else
+            {
+                pdir->setPositions(jointData.data());
+            }
         }
 
         return ret;
     }
 
-    virtual Bool GetDDescription(GeListNode* node, Description* description, DESCFLAGS_DESC &flags) override
+    virtual Bool GetDDescription(GeListNode* node, Description* description, DESCFLAGS_DESC& flags) override
     {
-        if (!description->LoadDescription(node->GetType())) 
+        if (!description->LoadDescription(node->GetType()))
             return false;
-        GeData data;
+
+        BaseContainer& data = *((BaseList2D*)node)->GetDataInstance();
+        BaseContainer* bc;
+        DescID cid;
         const DescID* singleid = description->GetSingleDescID();
-        if (!singleid || DescID(JOINT_COUNT).IsPartOf(*singleid, nullptr))
+
+        cid = DescLevel(JOINT_COUNT, DTYPE_LONG, 0);
+        if (!singleid || cid.IsPartOf(*singleid, nullptr))
         {
-            
-            this->Get()->GetParameter(DescID(JOINT_COUNT), data, DESCFLAGS_GET::NONE);
-            axisCount = data.GetInt32();
+
+            bc = description->GetParameterI(cid,0);
+            axisCount = data.GetInt32(JOINT_COUNT);
             auto currentcount = axisNames.size();
             if (currentcount < axisCount)
             {
                 std::generate_n(std::back_inserter(axisNames), axisCount - axisNames.size(), [this]
-                {
-                    auto ret = std::string("joint") + std::to_string(axisNames.size());
-                    return ret;
-                });
+                    {
+                        auto ret = std::string("joint") + std::to_string(axisNames.size());
+                        return ret;
+                    });
             }
         }
 
         for (int i = 0; i < axisCount; i++)
         {
-            DescID cid = DescLevel(JOINTS+i, DTYPE_BASELISTLINK, 0);
+            cid = DescLevel(JOINTS + i, DTYPE_BASELISTLINK, 0);
 
             if (!singleid || cid.IsPartOf(*singleid, nullptr))
             {
@@ -147,11 +205,33 @@ public:
         for (int i = 0; i < axisCount; i++)
         {
             doc = GetActiveDocument();
-            this->Get()->GetParameter(DescID(JOINTS + i), data, DESCFLAGS_GET::NONE);
-            jObjects[i] = (BaseObject*)data.GetLink(doc);
+            jObjects[i] = (BaseObject*)data.GetLink(JOINTS + i, doc);
+        }
+
+        cid = DescLevel(CONTROL_MODE, DTYPE_LONG, 0);
+        if ((!singleid || cid.IsPartOf(*singleid, nullptr)))
+        {
+            if (!shouldSetControlMode)
+            {
+                const auto bp      = data.GetInt32(CONTROL_MODE);
+                const auto newMode = bp == CONTROL_MODE_POSITION ? ControlMode::POSITION : ControlMode::POSITION_DIRECT;
+
+                if (mode != newMode)
+                {
+                    mode = newMode;
+                    cm->setControlModes(std::vector<int>(axisCount, mode == ControlMode::POSITION ? VOCAB_CM_POSITION : VOCAB_CM_POSITION_DIRECT).data());
+                }
+            }
+            else
+            {
+                const auto v = mode == ControlMode::POSITION ? CONTROL_MODE_POSITION : CONTROL_MODE_POSITION_DIRECT;
+                data.SetParameter(DescID(CONTROL_MODE), GeData(v));
+                shouldSetControlMode = false;
+            }
         }
 
         flags |= DESCFLAGS_DESC::LOADED;
+
         return SUPER::GetDDescription(node, description, flags);
 
     }
@@ -188,6 +268,13 @@ public:
                 return autoConfigure(bp.GetCStringCopy());
                 break;
             }
+            case SENDPOS_BUTTON:
+            {
+                if (mode != ControlMode::POSITION)
+                    break;
+                SendPositionCommand();
+                break;
+            }
             }
             break;
         }
@@ -212,6 +299,7 @@ public:
             closeDevice();
             return false;
         }
+
         closeDevice();
         int jn = 0;
         for (const auto& i : axisNames)
@@ -228,8 +316,6 @@ public:
         updateGui();
         return true;
     }
-
-    static NodeData* Alloc() { return NewObjClear(C4DRemoteControlBoard); }
 
     inline bool openPolydrv(const std::string part)
     {
@@ -250,7 +336,13 @@ public:
             DiagnosticOutput("ControlMode view failed");
             return false;
         }
-
+        
+        if (!pdr.view(pos))
+        {
+            DiagnosticOutput("Position view failed");
+            return false;
+        }
+        
         if (!pdr.view(pdir))
         {
             DiagnosticOutput("PositionDirect view failed");
@@ -313,7 +405,7 @@ public:
             return false;
         }
 
-        if (!setControlMode(VOCAB_CM_POSITION_DIRECT) || !setAxisNames())
+        if (!setControlMode(mode == ControlMode::POSITION ? VOCAB_CM_POSITION : VOCAB_CM_POSITION_DIRECT) || !setAxisNames())
         {
             closeDevice();
             return false;
@@ -342,6 +434,8 @@ public:
     {
         SendCoreMessage(COREMSG_CINEMA, BaseContainer(COREMSG_CINEMA_FORCE_AM_UPDATE), 0);
     }
+
+    static NodeData* Alloc() { return NewObjClear(C4DRemoteControlBoard); }
 };
 
 void RegisterRemoteControlBoard()
